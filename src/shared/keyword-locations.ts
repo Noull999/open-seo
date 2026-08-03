@@ -21,6 +21,37 @@
  */
 export const DEFAULT_LOCATION_CODE = 2840;
 
+/**
+ * Human-readable form of a canonical DataForSEO location_name, whose segments
+ * are comma-separated with inconsistent spacing ("Portland-Auburn, ME,United
+ * States"). Trims each segment; `maxSegments` truncates for compact display
+ * ("Enid, Oklahoma").
+ */
+export function formatLocationLabel(
+  locationName: string,
+  maxSegments?: number,
+): string {
+  const parts = locationName.split(",").map((part) => part.trim());
+  return (maxSegments ? parts.slice(0, maxSegments) : parts).join(", ");
+}
+
+/**
+ * shortLabel is a *display* label; the one entry that diverges from ISO
+ * 3166-1 alpha-2 is the United Kingdom ("UK" reads better, ISO is "GB").
+ */
+const ISO_COUNTRY_OVERRIDES: Record<string, string> = { UK: "GB" };
+
+/**
+ * Lowercase ISO 3166-1 alpha-2 code for a country location_code — the format
+ * DataForSEO's per-country endpoints (e.g. SERP locations) require.
+ */
+export function getIsoCountryCode(locationCode: number): string {
+  const shortLabel =
+    LOCATION_OPTIONS.find((option) => option.code === locationCode)
+      ?.shortLabel ?? "US";
+  return (ISO_COUNTRY_OVERRIDES[shortLabel] ?? shortLabel).toLowerCase();
+}
+
 type KeywordDataProvider = "labs" | "google_ads";
 
 type LocationOption = {
@@ -658,8 +689,82 @@ const LOCATION_LANGUAGE: Record<number, string> = Object.fromEntries(
   LOCATION_OPTIONS.map((option) => [option.code, option.languageCode]),
 );
 
+const SUPPORTED_LANGUAGE_CODES = new Set<string>(
+  LANGUAGE_OPTIONS.map((language) => language.code),
+);
+
 export function getLanguageCode(locationCode: number): string {
   return LOCATION_LANGUAGE[locationCode] ?? "en";
+}
+
+/**
+ * Resolves a request's market against the project's default. The pair is
+ * resolved together: overriding only the location snaps the language to that
+ * location's default language, because the project's language was chosen for
+ * the project's own location and may not be valid — or sensible — for the
+ * override (e.g. a Vietnam project querying Germany must not default to
+ * Vietnamese).
+ */
+export function resolveMarket(
+  args: { locationCode?: number; languageCode?: string },
+  project: { locationCode: number; languageCode: string },
+): { locationCode: number; languageCode: string } {
+  const locationCode = args.locationCode ?? project.locationCode;
+  const languageCode =
+    args.languageCode ??
+    (locationCode === project.locationCode
+      ? project.languageCode
+      : getLanguageCode(locationCode));
+  return { locationCode, languageCode };
+}
+
+/**
+ * Whether DataForSEO serves this language for this location. Only Labs
+ * locations have authoritative per-location language lists; Google Ads
+ * locations are left to the metering safety net.
+ */
+export function isLanguageServedForLocation(
+  locationCode: number,
+  languageCode: string,
+): boolean {
+  if (getKeywordDataProvider(locationCode) !== "labs") return true;
+  return getLanguageOptions(locationCode).some(
+    (option) => option.code === languageCode,
+  );
+}
+
+/**
+ * Resolves the market for a Labs-only tool. Same as resolveMarket, except a
+ * project default Labs cannot serve is replaced by the United States: the
+ * caller never chose that market, so rejecting the call would dead-end on a
+ * value it can't see — and passing the pair through would spend credits on a
+ * task DataForSEO rejects. An explicit location is left alone, so a caller that
+ * names an unserved country still fails loudly on its own assert.
+ */
+export function resolveLabsMarket(
+  args: { locationCode?: number; languageCode?: string },
+  project: { locationCode: number; languageCode: string },
+): { locationCode: number; languageCode: string } {
+  const projectIsServed =
+    getKeywordDataProvider(project.locationCode) === "labs" &&
+    isLanguageServedForLocation(project.locationCode, project.languageCode);
+
+  return resolveMarket(
+    args,
+    projectIsServed
+      ? project
+      : { locationCode: DEFAULT_LOCATION_CODE, languageCode: "en" },
+  );
+}
+
+/**
+ * Language codes DataForSEO accepts — the master LANGUAGE_OPTIONS list. Callers
+ * (e.g. MCP tools) can pass an arbitrary `language_code`; an unsupported one is
+ * otherwise rejected by DataForSEO as an opaque *charged* "Invalid Field:
+ * 'language_code'." failure, so we validate against this set first (cost 0).
+ */
+export function isSupportedLanguageCode(languageCode: string): boolean {
+  return SUPPORTED_LANGUAGE_CODES.has(languageCode);
 }
 
 /**
@@ -693,9 +798,9 @@ const MULTI_LANGUAGE_LOCATIONS: Record<number, readonly string[]> = {
 };
 
 /**
- * Languages to offer for a location's rank-tracking config. Restricts the
- * global LANGUAGE_OPTIONS list to the languages DataForSEO supports for that
- * country, so the picker isn't a wall of irrelevant options.
+ * Languages to offer for a location. Restricts the global LANGUAGE_OPTIONS
+ * list to the languages DataForSEO supports for that country, so a picker
+ * isn't a wall of irrelevant options.
  */
 export function getLanguageOptions(
   locationCode: number,

@@ -6,6 +6,7 @@ import { getDomainKeywordSuggestionsTool } from "@/server/mcp/tools/get-domain-k
 import { getDomainOverviewTool } from "@/server/mcp/tools/get-domain-overview";
 import { getRankTrackerTool } from "@/server/mcp/tools/get-rank-tracker";
 import { getSerpResultsTool } from "@/server/mcp/tools/get-serp-results";
+import { createProjectTool } from "@/server/mcp/tools/create-project";
 import { listProjectsTool } from "@/server/mcp/tools/list-projects";
 import { listSavedKeywordsTool } from "@/server/mcp/tools/list-saved-keywords";
 import {
@@ -22,6 +23,12 @@ import {
   getSearchConsolePerformanceTool,
   inspectUrlsTool,
 } from "@/server/mcp/tools/search-console-tools";
+import {
+  getAuditIssuesTool,
+  getAuditPagesTool,
+  getAuditStatusTool,
+  runSiteAuditTool,
+} from "@/server/mcp/tools/site-audit-tools";
 import { whoamiTool } from "@/server/mcp/tools/whoami";
 
 // Each handler is wrapped with instrumentMcpToolHandler so failures reach
@@ -46,6 +53,15 @@ export function registerOpenSeoMcpTools(server: McpServer) {
       listProjectsTool.name,
       listProjectsTool.config.outputSchema,
       listProjectsTool.handler,
+    ),
+  );
+  server.registerTool(
+    createProjectTool.name,
+    createProjectTool.config,
+    instrumentMcpToolHandler(
+      createProjectTool.name,
+      createProjectTool.config.outputSchema,
+      createProjectTool.handler,
     ),
   );
   server.registerTool(
@@ -199,6 +215,42 @@ export function registerOpenSeoMcpTools(server: McpServer) {
       inspectUrlsTool.name,
       inspectUrlsTool.config.outputSchema,
       inspectUrlsTool.handler,
+    ),
+  );
+  server.registerTool(
+    runSiteAuditTool.name,
+    runSiteAuditTool.config,
+    instrumentMcpToolHandler(
+      runSiteAuditTool.name,
+      runSiteAuditTool.config.outputSchema,
+      runSiteAuditTool.handler,
+    ),
+  );
+  server.registerTool(
+    getAuditStatusTool.name,
+    getAuditStatusTool.config,
+    instrumentMcpToolHandler(
+      getAuditStatusTool.name,
+      getAuditStatusTool.config.outputSchema,
+      getAuditStatusTool.handler,
+    ),
+  );
+  server.registerTool(
+    getAuditIssuesTool.name,
+    getAuditIssuesTool.config,
+    instrumentMcpToolHandler(
+      getAuditIssuesTool.name,
+      getAuditIssuesTool.config.outputSchema,
+      getAuditIssuesTool.handler,
+    ),
+  );
+  server.registerTool(
+    getAuditPagesTool.name,
+    getAuditPagesTool.config,
+    instrumentMcpToolHandler(
+      getAuditPagesTool.name,
+      getAuditPagesTool.config.outputSchema,
+      getAuditPagesTool.handler,
     ),
   );
 }
