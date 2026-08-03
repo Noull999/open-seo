@@ -39,6 +39,9 @@
     "seed:rank-tracking": "tsx scripts/seed-rank-tracking.ts",
     "ci:check": "prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd", "sharp"]
+  },
   "cloudflare": {
     "bindings": {
       "AUTH_MODE": {
